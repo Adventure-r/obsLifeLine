@@ -18,20 +18,6 @@
               "icon": "excalidraw-icon",
               "title": "Drawing 2025-06-04 14.12.25.excalidraw"
             }
-          },
-          {
-            "id": "1a9f086b4ee7084d",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Современные Технологии в Программировании/LifeLine.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "LifeLine"
-            }
           }
         ]
       }
@@ -90,7 +76,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 225.5
+    "width": 225.5,
+    "collapsed": true
   },
   "right": {
     "id": "68e93543dd593db2",
@@ -183,7 +170,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 200,
+    "collapsed": true
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -198,7 +186,7 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "c9d01b0532b53b01",
+  "active": "a0589b1389942d58",
   "lastOpenFiles": [
     "Современные Технологии в Программировании/LifeLine.md",
     "Современные Технологии в Программировании",
