@@ -4,19 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "7fd56d787d9aaadd",
+        "id": "218e8c118a79aea9",
         "type": "tabs",
         "children": [
           {
-            "id": "a0589b1389942d58",
+            "id": "a40b12c57aa92ab5",
             "type": "leaf",
             "state": {
-              "type": "excalidraw",
+              "type": "markdown",
               "state": {
-                "file": "Excalidraw/Drawing 2025-06-04 14.12.25.excalidraw.md"
+                "file": "ИИ/8th ревью.md",
+                "mode": "source",
+                "source": false
               },
-              "icon": "excalidraw-icon",
-              "title": "Drawing 2025-06-04 14.12.25.excalidraw"
+              "icon": "lucide-file",
+              "title": "8th ревью"
             }
           }
         ]
@@ -185,13 +187,26 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "a0589b1389942d58",
+  "active": "a40b12c57aa92ab5",
   "lastOpenFiles": [
-    "Современные Технологии в Программировании/База данных.md",
-    "Excalidraw/Drawing 2025-06-04 14.12.25.excalidraw.md",
+    "ИИ/8th Маркер важности.md",
+    "ИИ/8th ревью.md",
     "Современные Технологии в Программировании/LifeLine.md",
+    "Excalidraw/Drawing 2025-06-04 14.12.25.excalidraw.md",
+    "ИИ/3rd Events.md",
+    "ИИ/1st version.md",
+    "ИИ/9th очереди и темы.md",
+    "ИИ/7th Просмотренные события.md",
+    "ИИ/6th Просмотр обычными участниками.md",
+    "ИИ/5th event editing.md",
+    "ИИ/4th Helpers.md",
+    "ИИ/2nd version.md",
+    "ИИ/БД.md",
+    "ИИ",
+    "Excalidraw/Drawing 2025-06-04 14.12.25.excalidraw",
+    "Excalidraw/Drawing 2025-06-04 14.12.25.excalidraw — копия.md",
+    "Современные Технологии в Программировании/База данных.md",
     "Excalidraw/Drawing 2025-06-04 14.12.25.excalidraw 1.md",
-    "Untitled",
     "Pasted Image 20250604224802_716.png",
     "Современные Технологии в Программировании",
     "Как считать ф-цию.md",
@@ -210,8 +225,6 @@
     "5",
     "Математика/photo_2025-05-26_19-49-17 1.jpg",
     "Математика/6-е б задание.md",
-    "Математика/5-е задание.md",
-    "Математика/4-е задание.md",
-    "Математика/3-е задание.md"
+    "Математика/5-е задание.md"
   ]
 }
