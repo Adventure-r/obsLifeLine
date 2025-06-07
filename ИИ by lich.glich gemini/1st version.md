@@ -19,7 +19,155 @@
 
 Вот готовый SQL-скрипт. Просто выполните его в вашей базе данных, и все таблицы будут созданы.
 
-      `-- Рекомендуется включить расширение для генерации UUID CREATE EXTENSION IF NOT EXISTS "uuid-ossp";  -- 1. Таблица Пользователи (Users) -- telegram_id является естественным первичным ключом. CREATE TABLE Users (     telegram_id BIGINT PRIMARY KEY,     telegram_username VARCHAR(255) NULL,     first_name VARCHAR(255) NOT NULL,     last_name VARCHAR(255) NULL,     middle_name VARCHAR(255) NULL,     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),     last_active_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),     -- Настройки уведомлений в формате JSON. Очень гибко.     notification_settings JSONB NULL );  -- 2. Таблица Группы (Groups) CREATE TABLE Groups (     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),     name VARCHAR(255) NOT NULL,     description TEXT NULL,     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),     creator_id BIGINT REFERENCES Users(telegram_id) ON DELETE SET NULL -- Кто создал группу );  -- 3. Таблица Участники групп (GroupMembers) -- Связывает пользователей и группы, определяет их роли. -- Это более правильный подход, чем хранить id_группы и роли в таблице Users. CREATE TABLE GroupMembers (     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),     user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE CASCADE,     group_id UUID NOT NULL REFERENCES Groups(id) ON DELETE CASCADE,     is_leader BOOLEAN NOT NULL DEFAULT FALSE,     is_assistant BOOLEAN NOT NULL DEFAULT FALSE,     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),     -- Уникальное сочетание пользователя и группы, чтобы пользователь не мог вступить в одну группу дважды.     UNIQUE(user_id) -- Упрощенное ограничение по ТЗ: "Состоять пользователь может только в одной группе" ); CREATE INDEX idx_groupmembers_group_id ON GroupMembers(group_id);  -- 4. Таблица Приглашения в группы (GroupInvitations) CREATE TABLE GroupInvitations (     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),     group_id UUID NOT NULL REFERENCES Groups(id) ON DELETE CASCADE,     invited_by_user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE CASCADE,     invite_token VARCHAR(32) NOT NULL UNIQUE,     expires_at TIMESTAMPTZ NOT NULL, -- Срок действия     is_used BOOLEAN NOT NULL DEFAULT FALSE,     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW() ); CREATE INDEX idx_groupinvitations_token ON GroupInvitations(invite_token);  -- 5. Таблица События (Events) -- В отличие от вашей схемы, я убрал из Events прямые ссылки на deadline, order, topics. -- Правильнее, когда эти сущности ссылаются на Event, к которому они принадлежат. -- Это позволяет одному событию иметь, например, и дедлайн, и очередь. CREATE TABLE Events (     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),     group_id UUID NOT NULL REFERENCES Groups(id) ON DELETE CASCADE,     created_by_user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE SET NULL,     title VARCHAR(255) NOT NULL,     description TEXT NULL,     subject VARCHAR(255) NULL,     event_date DATE NOT NULL, -- Дата события для удобного отображения в календаре     is_important BOOLEAN NOT NULL DEFAULT FALSE,     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW() ); CREATE INDEX idx_events_group_id_date ON Events(group_id, event_date);  -- 6. Таблица Просмотренные события (ViewedEvents) CREATE TABLE ViewedEvents (     user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE CASCADE,     event_id UUID NOT NULL REFERENCES Events(id) ON DELETE CASCADE,     viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),     PRIMARY KEY (user_id, event_id) -- Композитный ключ, чтобы не было дублей );  -- 7. Таблица Дедлайны (Deadlines) CREATE TABLE Deadlines (     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),     event_id UUID NOT NULL REFERENCES Events(id) ON DELETE CASCADE,     description TEXT NULL,     deadline_at TIMESTAMPTZ NOT NULL -- Одна колонка для срока сдачи );  -- 8. Таблица Очереди (Queues) CREATE TABLE Queues (     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),     event_id UUID NOT NULL REFERENCES Events(id) ON DELETE CASCADE,     title VARCHAR(255) NOT NULL,     description TEXT NULL,     max_participants INT NULL, -- NULL, если нет ограничения     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW() );  -- 9. Таблица Участники очередей (QueueParticipants) CREATE TABLE QueueParticipants (     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),     queue_id UUID NOT NULL REFERENCES Queues(id) ON DELETE CASCADE,     user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE CASCADE,     position INT NOT NULL,     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),     UNIQUE(queue_id, user_id), -- Пользователь не может быть в одной очереди дважды     UNIQUE(queue_id, position) -- Позиция в очереди должна быть уникальной );  -- 10. Таблица Списки тем (TopicLists) -- Контейнер для тем, который связан с событием. CREATE TABLE TopicLists (     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),     event_id UUID NOT NULL REFERENCES Events(id) ON DELETE CASCADE,     title VARCHAR(255) NOT NULL,     max_participants_per_topic INT NOT NULL, -- Ограничение на 1 тему     created_by_user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE SET NULL,     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW() );  -- 11. Таблица Темы (Topics) CREATE TABLE Topics (     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),     topic_list_id UUID NOT NULL REFERENCES TopicLists(id) ON DELETE CASCADE,     title VARCHAR(255) NOT NULL,     description TEXT NULL );  -- 12. Таблица Выбор тем (TopicSelections) CREATE TABLE TopicSelections (     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),     topic_id UUID NOT NULL REFERENCES Topics(id) ON DELETE CASCADE,     user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE CASCADE,     selected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),     -- Староста может закрепить выбор, чтобы студент не мог его поменять.     is_confirmed BOOLEAN NOT NULL DEFAULT FALSE,     confirmed_by_user_id BIGINT NULL REFERENCES Users(telegram_id) ON DELETE SET NULL,     UNIQUE(topic_id, user_id) -- Один пользователь - одна тема );  -- 13. Таблица Коды доступа для админов (AdminAccessCodes) CREATE TABLE AdminAccessCodes (     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),     code VARCHAR(64) NOT NULL UNIQUE,     is_one_time BOOLEAN NOT NULL DEFAULT TRUE,     expires_at TIMESTAMPTZ, -- Может быть NULL для постоянных ссылок     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),     is_active BOOLEAN NOT NULL DEFAULT TRUE );  -- 14. Таблица Логи (ChangeLog) - Ваша идея про журналирование -- Единая таблица для всех логов, включая входы админов CREATE TABLE ChangeLog (     id BIGSERIAL PRIMARY KEY,     user_id BIGINT REFERENCES Users(telegram_id) ON DELETE SET NULL,     action_type VARCHAR(50) NOT NULL, -- 'LOGIN_ADMIN', 'CREATE_GROUP', 'DELETE_EVENT'     details JSONB NULL, -- Детали действия (IP, старые/новые значения)     entity_type VARCHAR(50) NULL, -- 'group', 'event'     entity_id VARCHAR(255) NULL, -- ID сущности (может быть UUID или BIGINT)     changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW() );`
+      `-- Включаем расширение для генерации UUID
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- 1. Таблица Пользователи (Users)
+CREATE TABLE Users (
+    telegram_id BIGINT PRIMARY KEY,
+    telegram_username VARCHAR(255) NULL,
+    first_name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255) NULL,
+    middle_name VARCHAR(255) NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_active_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notification_settings JSONB NULL -- Настройки уведомлений в формате JSON
+);
+
+-- 2. Таблица Группы (Groups)
+CREATE TABLE Groups (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    creator_id BIGINT REFERENCES Users(telegram_id) ON DELETE SET NULL
+);
+
+-- 3. Таблица Участники групп (GroupMembers)
+CREATE TABLE GroupMembers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE CASCADE,
+    group_id UUID NOT NULL REFERENCES Groups(id) ON DELETE CASCADE,
+    is_leader BOOLEAN NOT NULL DEFAULT FALSE,
+    is_assistant BOOLEAN NOT NULL DEFAULT FALSE,
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id) -- Пользователь может состоять только в одной группе
+);
+CREATE INDEX idx_groupmembers_group_id ON GroupMembers(group_id);
+
+-- 4. Таблица Приглашения в группы (GroupInvitations)
+CREATE TABLE GroupInvitations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    group_id UUID NOT NULL REFERENCES Groups(id) ON DELETE CASCADE,
+    invited_by_user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE CASCADE,
+    invite_token VARCHAR(32) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    is_used BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_groupinvitations_token ON GroupInvitations(invite_token);
+
+-- 5. Таблица События (Events)
+CREATE TABLE Events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    group_id UUID NOT NULL REFERENCES Groups(id) ON DELETE CASCADE,
+    created_by_user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE SET NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    subject VARCHAR(255) NULL,
+    event_date DATE NOT NULL,
+    is_important BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_events_group_id_date ON Events(group_id, event_date);
+
+-- 6. Таблица Просмотренные события (ViewedEvents)
+CREATE TABLE ViewedEvents (
+    user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE CASCADE,
+    event_id UUID NOT NULL REFERENCES Events(id) ON DELETE CASCADE,
+    viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, event_id)
+);
+
+-- 7. Таблица Дедлайны (Deadlines)
+CREATE TABLE Deadlines (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    event_id UUID NOT NULL REFERENCES Events(id) ON DELETE CASCADE,
+    description TEXT NULL,
+    deadline_at TIMESTAMPTZ NOT NULL
+);
+
+-- 8. Таблица Очереди (Queues)
+CREATE TABLE Queues (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    event_id UUID NOT NULL REFERENCES Events(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    max_participants INT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 9. Таблица Участники очередей (QueueParticipants)
+CREATE TABLE QueueParticipants (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    queue_id UUID NOT NULL REFERENCES Queues(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE CASCADE,
+    position INT NOT NULL,
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(queue_id, user_id),
+    UNIQUE(queue_id, position)
+);
+
+-- 10. Таблица Списки тем (TopicLists)
+CREATE TABLE TopicLists (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    event_id UUID NOT NULL REFERENCES Events(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    max_participants_per_topic INT NOT NULL,
+    created_by_user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 11. Таблица Темы (Topics)
+CREATE TABLE Topics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    topic_list_id UUID NOT NULL REFERENCES TopicLists(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NULL
+);
+
+-- 12. Таблица Выбор тем (TopicSelections)
+CREATE TABLE TopicSelections (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    topic_id UUID NOT NULL REFERENCES Topics(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES Users(telegram_id) ON DELETE CASCADE,
+    selected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    is_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+    confirmed_by_user_id BIGINT NULL REFERENCES Users(telegram_id) ON DELETE SET NULL,
+    UNIQUE(topic_id, user_id)
+);
+
+-- 13. Таблица Коды доступа для админов (AdminAccessCodes)
+CREATE TABLE AdminAccessCodes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code VARCHAR(64) NOT NULL UNIQUE,
+    is_one_time BOOLEAN NOT NULL DEFAULT TRUE,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- 14. Таблица Логи (ChangeLog)
+CREATE TABLE ChangeLog (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES Users(telegram_id) ON DELETE SET NULL,
+    action_type VARCHAR(50) NOT NULL,
+    details JSONB NULL,
+    entity_type VARCHAR(50) NULL,
+    entity_id VARCHAR(255) NULL,
+    changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+`
     
 
 IGNORE_WHEN_COPYING_START
